@@ -117,12 +117,9 @@ func Detect(filename string) {
 		if strings.Contains(line, "err :=") {
 			next := i + 1
 			if next < length {
-				i, skip := filterScope(i, lines)
-				if skip {
-					break
-				}
-				nextLine := lines[i+1]
+				i, _ := filterScope(i, lines)
 				next = i + 1
+				nextLine := lines[next]
 				if strings.Contains(nextLine, "err != nil") {
 					continue
 				}
