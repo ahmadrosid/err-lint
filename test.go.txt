@@ -1,0 +1,278 @@
+package module
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"gopkg.sirogu.com/source/rubel-forum/core/entity"
+	"gopkg.sirogu.com/source/rubel-forum/core/repository"
+	"gopkg.sirogu.com/source/rubel-forum/pkg"
+	"gopkg.sirogu.com/source/shared-lib/go/logger"
+)
+
+type gamification struct {
+	gamificationRepo       repository.GamificationRepo
+	userRepo               repository.User
+	questionRepo           repository.Question
+	templateParser         pkg.ParseTemplate
+	toolTipConfig          entity.TooltipNextLevelConfig
+	avatarItemCopyConfig   entity.AvatarItemCopyConfig
+	threadBountyInfoConfig entity.ThreadBountyGamificationInfoConfig
+	packageOwnershipRepo   repository.PackageOwnershipRepo
+}
+
+type Gamification interface {
+	GetThreadDetailGamification(ctx context.Context, threadSerial, userSerial string) (*entity.ThreadDetailGamificationResponse, error)
+	CreateStudentBookingDiscussion(ctx context.Context, threadSerial, userSerial string) (*entity.StudentBookingDiscussionResponse, error)
+	UpdateStudentBookingDiscussion(ctx context.Context, req *entity.StudentBookingRequest) (*entity.StudentBookingDiscussionResponse, error)
+	GetGamificationUserProfile(ctx context.Context, userSerial string, needSubscriptionInfo bool) (*entity.UserProfileSummaryResponse, error)
+	GetStudentBookingDiscussion(ctx context.Context, bookingSerial, threadSerial string) (*entity.ThreadBookingDetail, error)
+	GetThreadBountyGamificationInfo(ctx context.Context) entity.ThreadBountyGamificationInfoConfig
+	UpsertForumReward(ctx context.Context, req *entity.UpsertForumRewardRequest) (*entity.UpsertForumRewardRequest, error)
+	GetRobocupInfos(ctx context.Context, userSerial string) (*entity.UserRobocupInfos, error)
+	UpsertForumRewardHistory(ctx context.Context, req *entity.ForumRewardHistoryRequest) (*entity.ForumRewardHistoryRequest, error)
+	PingRobocupTracker(ctx context.Context, rewardHistorySerial, userSerial string) error
+}
+
+func NewGamification(
+	gamificationRepo repository.GamificationRepo,
+	userRepo repository.User,
+	questionRepo repository.Question,
+	templateParser pkg.ParseTemplate,
+	toolTipConfig entity.TooltipNextLevelConfig,
+	avatarItemCopyConfig entity.AvatarItemCopyConfig,
+	threadBountyInfoConfig entity.ThreadBountyGamificationInfoConfig,
+	packageOwnershipRepo repository.PackageOwnershipRepo,
+) Gamification {
+
+	return &gamification{
+		gamificationRepo:       gamificationRepo,
+		userRepo:               userRepo,
+		questionRepo:           questionRepo,
+		templateParser:         templateParser,
+		toolTipConfig:          toolTipConfig,
+		avatarItemCopyConfig:   avatarItemCopyConfig,
+		threadBountyInfoConfig: threadBountyInfoConfig,
+		packageOwnershipRepo:   packageOwnershipRepo,
+	}
+}
+
+func (g *gamification) GetThreadDetailGamification(ctx context.Context, threadSerial, userSerial string) (*entity.ThreadDetailGamificationResponse, error) {
+	if threadSerial == "" {
+		return nil, ErrThreadSerialRequired
+	}
+	cantAnswer := true
+	// Get Booked User by Thread Serial
+	threadBooks, err := g.gamificationRepo.GetThreadDetailGamification(ctx, threadSerial, userSerial)
+	if err != nil {
+		return nil, err
+	}
+	if (threadBooks.DiscussionFinishCount+threadBooks.TypedUserCountWithoutMe < 2) && !threadBooks.IsThreadCreator && !threadBooks.HasAnswer {
+		cantAnswer = false
+	}
+	if err != nil && !errors.Is(err, ErrThreadFullBooked) {
+		return nil, err
+	}
+	if !threadBooks.HasAnotherBooking {
+		// Get another booking in case they book another thread
+		userBooking, err := g.gamificationRepo.GetThreadDetailGamificationByUserSerial(ctx, userSerial)
+		if err != nil {
+			logger.Errorf("GetThreadDetailGamificationByUserSerial error while get user booking : %+v", err)
+		}
+		if userBooking != nil && userBooking.BookingSerial != "" {
+			threadBooks.HasAnotherBooking = true
+			threadBooks.Thread.StudentBookingDetail = *userBooking
+			threadSerial = userBooking.ThreadSerial
+		}
+	}
+	if threadBooks.HasAnotherBooking {
+		// Get Thread Detail
+		queryForum := entity.QuestionQuery{
+			FilterByForumSerials: []string{threadSerial},
+			Page:                 1,
+			PageSize:             1,
+		}
+		queryForum.FilterByLabels = queryForum.FilterByLabels.Add(entity.LabelHidden, false)
+		threadDetail, err := g.questionRepo.GetQuestionsByThreadSerials(ctx, &queryForum, true)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+		}
+		if len(threadDetail.Questions) > 0 {
+			threadBooks.Thread.Content = threadDetail.Questions[0].Content
+			threadBooks.Thread.Slug = threadDetail.Questions[0].GetSlug(threadBooks.Thread.Content, threadSerial)
+			threadBooks.Thread.Attachment = append(threadBooks.Thread.Attachment, threadDetail.Questions[0].Attachments...)
+		}
+	}
+
+	if len(threadBooks.TypedUser) > 0 {
+		userSerials := threadBooks.GetTypedUserSerial()
+		// Get Username
+		userInfos, err := g.userRepo.GetUserPublicProfiles(ctx, userSerials)
+		if err != nil {
+			logger.Errorf("GetThreadDetailGamification error while do GetUserPublicProfiles : %+v", err)
+		}
+
+		// Get user level
+		userLevels, err := g.gamificationRepo.GetUserGamiLevels(ctx, strings.Join(userSerials, ","))
+		if err != nil {
+			logger.Errorf("GetThreadDetailGamification error while do GetUserGamiLevels : %+v", err)
+		}
+		threadBooks = threadBooks.SetUserInfo(userInfos, userLevels)
+	}
+
+	threadBooks.CantAnswer = cantAnswer
+	threadBooks.Thread.ThreadSerial = threadSerial
+
+	return threadBooks, nil
+}
+
+func (g *gamification) CreateStudentBookingDiscussion(ctx context.Context, threadSerial, userSerial string) (*entity.StudentBookingDiscussionResponse, error) {
+	if threadSerial == "" {
+		return nil, ErrThreadSerialRequired
+	}
+
+	resp, err := g.gamificationRepo.CreateStudentBookingDiscussion(ctx, threadSerial, userSerial)
+	if err != nil {
+		return nil, err
+	}
+	// Get Thread Detail
+	queryForum := entity.QuestionQuery{
+		FilterByForumSerials: []string{threadSerial},
+		Page:                 1,
+		PageSize:             1,
+	}
+	queryForum.FilterByLabels = queryForum.FilterByLabels.Add(entity.LabelHidden, false)
+	threadDetail, err := g.questionRepo.GetQuestionsByThreadSerials(ctx, &queryForum, true)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+	}
+	if len(threadDetail.Questions) > 0 {
+		resp.Content = threadDetail.Questions[0].Content
+	}
+
+	return resp, nil
+}
+
+func (g *gamification) UpdateStudentBookingDiscussion(ctx context.Context, req *entity.StudentBookingRequest) (*entity.StudentBookingDiscussionResponse, error) {
+	if req.BookingSerial == "" {
+		return nil, fmt.Errorf("%w: bookingSerial are required", ErrBadRequest)
+	}
+	if req.ForunDiscussionSerial == "" && req.IsDeleted {
+		return nil, fmt.Errorf("%w: cannot finish booking while no discussionSerial", ErrBadRequest)
+	}
+	return g.gamificationRepo.UpdateStudentBookingDiscussion(ctx, req)
+}
+
+func (g *gamification) GetGamificationUserProfile(ctx context.Context, userSerial string, needSubscriptionInfo bool) (*entity.UserProfileSummaryResponse, error) {
+	userProfile, err := g.gamificationRepo.GetUserProfileSummary(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+	}
+
+	userSerialList := []string{userSerial}
+	userInfo, err := g.userRepo.GetUserPublicProfiles(ctx, userSerialList)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+	}
+
+	userProfile.User.Username = userInfo[userSerial].Name
+	userProfile.User.PhotoUrl = userInfo[userSerial].ProfilePicFullDomain
+
+	nextLevel := strconv.Itoa(int(userProfile.NextLevelProgress.LevelNumber))
+	levelUpRewards, err := g.gamificationRepo.GetLevelRewards(ctx, nextLevel)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+	}
+
+	placeholder := entity.TooltipPlaceholder{
+		Xp:         userProfile.NextLevelProgress.XpRequired - userProfile.TotalXp,
+		Gold:       levelUpRewards.Gold,
+		Level:      nextLevel,
+		AvatarItem: g.avatarItemCopyConfig.GetCopy(levelUpRewards.AvatarItem),
+	}
+	var tooltipContent string
+	if levelUpRewards.AvatarItem != "" {
+		tooltipContent = g.templateParser.ParseTemplate(g.toolTipConfig.LevelUpGetGoldAndAvatarItem, placeholder)
+	} else {
+		tooltipContent = g.templateParser.ParseTemplate(g.toolTipConfig.LevelUpGetGold, placeholder)
+	}
+
+	userProfile.NextLevelProgress.TooltipContent = tooltipContent
+
+	if !needSubscriptionInfo {
+		return userProfile, nil
+	}
+
+	// Get User Package
+	subscriptionStatus, err := g.packageOwnershipRepo.GetuserSubscriptionStatusByUserSerial(ctx, userSerial)
+	if err != nil {
+		logger.Errorf("%v: %v", ErrGetUserSubsData, err)
+		return nil, err
+	}
+
+	userProfile.IsSubscriptionActive = subscriptionStatus.IsSubscriptionActive
+	userProfile.SubscriptionExpDate = subscriptionStatus.SubscriptionExpDate
+
+	return userProfile, nil
+}
+
+func (g *gamification) GetStudentBookingDiscussion(ctx context.Context, bookingSerial, threadSerial string) (*entity.ThreadBookingDetail, error) {
+	if bookingSerial == "" && threadSerial == "" {
+		return nil, ErrBookingAndThreadSerialRequired
+	}
+	// Get Booking Detail
+	threadBooking, err := g.gamificationRepo.GetStudentBookingDiscussion(ctx, bookingSerial, threadSerial)
+	if err != nil {
+		return nil, err
+	}
+	// Get Thread Detail
+	queryForum := entity.QuestionQuery{
+		FilterByForumSerials: []string{threadSerial},
+		Page:                 1,
+		PageSize:             1,
+	}
+	queryForum.FilterByLabels = queryForum.FilterByLabels.Add(entity.LabelHidden, false)
+	threadDetail, err := g.questionRepo.GetQuestionsByThreadSerials(ctx, &queryForum, true)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+	}
+	if len(threadDetail.Questions) > 0 {
+		threadBooking.Content = threadDetail.Questions[0].Content
+	}
+	return threadBooking, nil
+}
+
+func (g *gamification) GetThreadBountyGamificationInfo(ctx context.Context) entity.ThreadBountyGamificationInfoConfig {
+	return g.threadBountyInfoConfig
+}
+
+func (g *gamification) UpsertForumReward(ctx context.Context, req *entity.UpsertForumRewardRequest) (*entity.UpsertForumRewardRequest, error) {
+	if req.ForumRewardSerial == "" {
+		req.ForumRewardSerial = pkg.SerialGenerator("FRW-")
+	}
+	eq, err := g.callSome() {
+		return nil
+	}
+	println(eq)
+	return g.gamificationRepo.UpsertForumReward(ctx, req)
+}
+
+func (g *gamification) GetRobocupInfos(ctx context.Context, userSerial string) (*entity.UserRobocupInfos, error) {
+	resp, err := g.gamificationRepo.GetRobocupInfos(ctx, userSerial)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (g *gamification) UpsertForumRewardHistory(ctx context.Context, req *entity.ForumRewardHistoryRequest) (*entity.ForumRewardHistoryRequest, error) {
+	return g.gamificationRepo.UpsertForumRewardHistory(ctx, req)
+}
+
+func (g *gamification) PingRobocupTracker(ctx context.Context, rewardHistorySerial, userSerial string) error {
+	return g.gamificationRepo.PingRobocupTracker(ctx, rewardHistorySerial, userSerial)
+}
