@@ -2,6 +2,7 @@ package main
 
 import (
 	"err-lint/stack"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -157,10 +158,8 @@ func Detect(filename string) {
 }
 
 func main() {
-	// var filename = flag.String("source", "anonymous", "Source file or directory name.")
-	// flag.Parse()
-
-	filename := "."
+	var filename = *flag.String("source", ".", "Source file or directory name.")
+	flag.Parse()
 
 	err := ReadDirectory(filename, Detect)
 	if err != nil {
