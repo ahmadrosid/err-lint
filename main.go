@@ -141,7 +141,7 @@ func Detect(filename string) {
 				println(fmt.Sprintf("%s:%d", filename, next+1))
 				println(fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx]))
 
-				rangeIdx := next - curLineIdx
+				rangeIdx := next - curLineIdx - 1
 				for {
 					curLineIdx++
 					println(fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx]))
