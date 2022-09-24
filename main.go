@@ -34,28 +34,6 @@ func ReadDirectory(dir string, result func(filename string)) error {
 	return nil
 }
 
-func checkBracket(st *stack.Stack, line string) *stack.Stack {
-	pair := map[rune]rune{
-		'{': '}',
-		'(': ')',
-	}
-	line = strings.TrimSpace(line)
-	for _, c := range line {
-		if _, exists := pair[c]; exists {
-			st.Push(c)
-		} else {
-			newStack, ch := st.Pop()
-			if ch == '0' {
-				continue
-			}
-			if pair[ch] == c {
-				st = newStack
-			}
-		}
-	}
-	return st
-}
-
 func max(cur int, limit int) int {
 	if cur >= limit {
 		return limit
@@ -70,7 +48,7 @@ func filterScope(i int, lines []string) (next int) {
 	countBracket := stack.NewStack()
 
 	if strings.Contains(line, "{") || strings.Contains(line, "(") {
-		countBracket = checkBracket(countBracket, line)
+		countBracket = check.Bracket(countBracket, line)
 		for {
 			i++
 			if i == length-1 {
@@ -78,7 +56,7 @@ func filterScope(i int, lines []string) (next int) {
 			}
 			next = i
 			nextLine := lines[next]
-			countBracket = checkBracket(countBracket, nextLine)
+			countBracket = check.Bracket(countBracket, nextLine)
 			hasDotSuffix := false
 			if strings.HasSuffix(strings.TrimSpace(nextLine), ".") {
 				hasDotSuffix = true

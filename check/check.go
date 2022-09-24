@@ -1,8 +1,31 @@
 package check
 
 import (
+	"err-lint/stack"
 	"strings"
 )
+
+func Bracket(st *stack.Stack, line string) *stack.Stack {
+	pair := map[rune]rune{
+		'{': '}',
+		'(': ')',
+	}
+	line = strings.TrimSpace(line)
+	for _, c := range line {
+		if _, exists := pair[c]; exists {
+			st.Push(c)
+		} else {
+			newStack, ch := st.Pop()
+			if ch == '0' {
+				continue
+			}
+			if pair[ch] == c {
+				st = newStack
+			}
+		}
+	}
+	return st
+}
 
 func ContainsCorrectErrHandler(line string) bool {
 	words := strings.Split(line, " ")
