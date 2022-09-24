@@ -48,7 +48,8 @@ func ContainsCorrectErrHandler(line string) bool {
 	}
 
 	if hasIfHandler && ifHandler != 0 {
-		return strings.Contains(strings.ToLower(line), "is(err)")
+		line = strings.ToLower(line)
+		return strings.Contains(line, "is(err") || strings.Contains(line, "(err)")
 	}
 
 	return returnHandler == 0 || ifHandler == 0 || isNotNil == 0
