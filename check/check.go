@@ -6,11 +6,15 @@ import (
 
 func ContainsCorrectErrHandler(line string) bool {
 	words := strings.Split(line, " ")
+
+	errVar := "err"
+
 	returnHandler := -1
 	ifHandler := -1
+	isNotNil := -1
+
 	hasErrBefore := false
 	hasNotEqBefore := false
-	isNotNil := 0
 	for _, w := range words {
 		w = strings.TrimSpace(w)
 		if w == "return" {
@@ -19,7 +23,7 @@ func ContainsCorrectErrHandler(line string) bool {
 		if w == "if" {
 			ifHandler = 3
 		}
-		if strings.Contains(w, "err") {
+		if strings.Contains(w, errVar) {
 			returnHandler--
 			if !hasErrBefore {
 				ifHandler--
@@ -39,6 +43,11 @@ func ContainsCorrectErrHandler(line string) bool {
 			isNotNil--
 		}
 	}
+
+	if ifHandler != 0 {
+		return strings.Contains(strings.ToLower(line), "is(err)")
+	}
+
 	return returnHandler == 0 || ifHandler == 0 || isNotNil == 0
 }
 

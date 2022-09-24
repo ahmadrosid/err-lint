@@ -57,7 +57,7 @@ func checkBracket(st *stack.Stack, line string) *stack.Stack {
 }
 
 func max(cur int, limit int) int {
-	if cur > limit {
+	if cur >= limit {
 		return limit
 	}
 	return cur
@@ -68,37 +68,44 @@ func filterScope(i int, lines []string) (next int) {
 	length := len(lines)
 
 	countBracket := stack.NewStack()
-	hasDotSuffix := false
 
 	if strings.Contains(line, "{") || strings.Contains(line, "(") {
 		countBracket = checkBracket(countBracket, line)
 		for {
 			i++
-			if i >= length {
+			if i == length-1 {
 				break
 			}
 			next = i
 			nextLine := lines[next]
 			countBracket = checkBracket(countBracket, nextLine)
 
-			if strings.HasSuffix(nextLine, ".") {
-				hasDotSuffix = true
-				continue
-			}
 			if countBracket.Len() == 0 {
-				if hasDotSuffix {
-					next = max(next+1, length-1)
+				lastLine := strings.TrimSpace(lines[max(next+1, length-1)])
+				if strings.HasSuffix(strings.TrimSpace(lastLine), ".") {
+					continue
+				}
+
+				if strings.HasPrefix(lastLine, "//") {
+					continue
+				}
+
+				if check.IsOnlyWhiteSpace(lastLine) {
+					continue
 				}
 				break
 			}
 		}
 	}
-
 	return next
 }
 
 func Detect(filename string) {
 	if !strings.HasSuffix(filename, ".go") {
+		return
+	}
+
+	if strings.HasSuffix(filename, "_test.go") {
 		return
 	}
 
@@ -134,23 +141,6 @@ func Detect(filename string) {
 
 				if check.ContainsCorrectErrHandler(nextLine) {
 					continue
-				}
-
-				for {
-					if i == length {
-						next = i - 1
-						break
-					}
-
-					if check.IsOnlyWhiteSpace(nextLine) {
-						i++
-						if i < length {
-							next = i
-							nextLine = lines[next]
-						}
-					} else {
-						break
-					}
 				}
 
 				printedLines := []string{
