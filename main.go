@@ -1,13 +1,14 @@
 package main
 
 import (
-	"err-lint/check"
-	"err-lint/stack"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"err-lint/check"
+	"err-lint/stack"
 
 	"github.com/fatih/color"
 )
