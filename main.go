@@ -186,13 +186,13 @@ func Detect(filename string) {
 }
 
 func main() {
-	filename := "."
+	source := "."
 	if len(os.Args) > 1 {
-		filename = os.Args[1]
+		source = os.Args[1]
 	}
 
-	err := ReadDirectory(filename, Detect)
+	err := ReadDirectory(source, Detect)
 	if err != nil {
-		Detect(filename)
+		Detect(source)
 	}
 }
