@@ -35,16 +35,13 @@ func isOkErrorHandler(line string) bool {
 func ContainsCorrectErrHandler(line string) bool {
 	words := strings.Split(line, " ")
 
-	errVar := "err"
-
 	returnHandler := -1
 	ifHandler := -1
-	isNotNil := -1
+	errHandler := -1
 
 	hasIfHandler := false
 	hasErrBefore := false
 	hasNotEqBefore := false
-	hasNilBefore := false
 	hasEqBefore := false
 
 	for _, w := range words {
@@ -53,46 +50,43 @@ func ContainsCorrectErrHandler(line string) bool {
 			returnHandler = 1
 		}
 		if w == "if" {
-			ifHandler = 3
+			ifHandler = 2
 			hasIfHandler = true
 		}
-		if strings.Contains(w, errVar) {
+		if w == "err" {
 			returnHandler--
 			if !hasErrBefore {
 				ifHandler--
-				isNotNil = 2
+				errHandler = 1
 			}
 			hasErrBefore = true
 		}
 		if w == "!=" {
 			if !hasNotEqBefore {
 				ifHandler--
-				isNotNil--
+				errHandler--
 			}
 			hasNotEqBefore = true
 		}
 		if w == "==" {
-			if !hasEqBefore && !hasNotEqBefore {
+			if !hasEqBefore && !hasNotEqBefore && !hasErrBefore {
 				ifHandler--
+				errHandler--
 			}
+			if hasErrBefore && !hasEqBefore {
+				errHandler--
+			}
+
 			hasEqBefore = true
-		}
-		if w == "nil" {
-			if !hasNilBefore {
-				ifHandler--
-				isNotNil--
-			}
-			hasNilBefore = true
 		}
 	}
 
-	status := returnHandler == 0 || ifHandler == 0 || isNotNil == 0
-
-	if hasIfHandler && ifHandler != 0 {
+	status := returnHandler == 0 || ifHandler == 0 || errHandler == 0
+	if hasIfHandler && ifHandler == 0 && !status {
 		return isOkErrorHandler(line)
 	}
 
-	if hasErrBefore && !status {
+	if strings.Contains(line, "err") && !status {
 		return isOkErrorHandler(line)
 	}
 

@@ -50,6 +50,10 @@ func TestValidateContains(t *testing.T) {
 			input:    "if err == nil {",
 			expected: true,
 		},
+		{
+			input:    "if parent, err := commit.Parent(i); err == nil && parent != nil {",
+			expected: true,
+		},
 	}
 
 	for _, s := range scenarios {
