@@ -1,3 +1,3 @@
 # Error Lint for Golang
 
-Detect incorrectly unhandled error in your Go project.
+Find errors in your Go project that are incorrectly handled or unhandled.
