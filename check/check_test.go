@@ -6,31 +6,46 @@ import (
 )
 
 func TestValidateContains(t *testing.T) {
-	if check.ContainsCorrectErrHandler("if err != nil {") != true {
-		t.Errorf("expected true got false")
+	scenarios := []struct {
+		input    string
+		expected bool
+	}{
+		{
+			input:    "if err != nil {",
+			expected: true,
+		},
+		{
+			input:    "return err",
+			expected: true,
+		},
+		{
+			input:    "}); err != nil {",
+			expected: true,
+		},
+		{
+			input:    "\tif err != nil && err != redis.ErrNil {",
+			expected: true,
+		},
+		{
+			input:    "\tif err != nil && strings.Contains(",
+			expected: true,
+		},
+		{
+			input:    "return fmt, err",
+			expected: true,
+		},
+		{
+			input:    "return (SomeStruct)(*detail).ToEntity(), nil",
+			expected: false,
+		},
 	}
 
-	if check.ContainsCorrectErrHandler("return err") != true {
-		t.Errorf("expected true got false")
-	}
-
-	if check.ContainsCorrectErrHandler("}); err != nil {") != true {
-		t.Errorf("expected true got false")
-	}
-
-	if check.ContainsCorrectErrHandler("\tif err != nil && err != redis.ErrNil {") != true {
-		t.Errorf("expected true got false")
-	}
-
-	if check.ContainsCorrectErrHandler("\tif err != nil && strings.Contains(") != true {
-		t.Errorf("expected true got false")
-	}
-
-	if check.ContainsCorrectErrHandler("return fmt, err") != true {
-		t.Errorf("expected true got false")
-	}
-
-	if check.ContainsCorrectErrHandler("return (rgreviewInappropriateContentReportDetail)(*resDetail).ToEntity(), nil") != false {
-		t.Errorf("expected false got true")
+	for _, s := range scenarios {
+		t.Run(s.input, func(t *testing.T) {
+			actual := check.ContainsCorrectErrHandler(s.input)
+			if actual != s.expected {
+				t.Errorf("\ninput: '%s'\nexpected: %+v got %+v", s.input, s.expected, actual)
+			}
+		})
 	}
 }
