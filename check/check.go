@@ -27,6 +27,11 @@ func Bracket(st *stack.Stack, line string) *stack.Stack {
 	return st
 }
 
+func isOkErrorHandler(line string) bool {
+	line = strings.ToLower(line)
+	return strings.Contains(line, "is(err") || strings.Contains(line, "(err)")
+}
+
 func ContainsCorrectErrHandler(line string) bool {
 	words := strings.Split(line, " ")
 
@@ -70,12 +75,17 @@ func ContainsCorrectErrHandler(line string) bool {
 		}
 	}
 
+	status := returnHandler == 0 || ifHandler == 0 || isNotNil == 0
+
 	if hasIfHandler && ifHandler != 0 {
-		line = strings.ToLower(line)
-		return strings.Contains(line, "is(err") || strings.Contains(line, "(err)")
+		return isOkErrorHandler(line)
 	}
 
-	return returnHandler == 0 || ifHandler == 0 || isNotNil == 0
+	if hasErrBefore && !status {
+		return isOkErrorHandler(line)
+	}
+
+	return status
 }
 
 func isWhitespace(c rune) bool {

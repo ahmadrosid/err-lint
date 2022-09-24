@@ -38,6 +38,10 @@ func TestValidateContains(t *testing.T) {
 			input:    "return (SomeStruct)(*detail).ToEntity(), nil",
 			expected: false,
 		},
+		{
+			input:    "CheckErr(err)",
+			expected: true,
+		},
 	}
 
 	for _, s := range scenarios {
