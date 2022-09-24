@@ -13,8 +13,10 @@ func ContainsCorrectErrHandler(line string) bool {
 	ifHandler := -1
 	isNotNil := -1
 
+	hasIfHandler := false
 	hasErrBefore := false
 	hasNotEqBefore := false
+
 	for _, w := range words {
 		w = strings.TrimSpace(w)
 		if w == "return" {
@@ -22,6 +24,7 @@ func ContainsCorrectErrHandler(line string) bool {
 		}
 		if w == "if" {
 			ifHandler = 3
+			hasIfHandler = true
 		}
 		if strings.Contains(w, errVar) {
 			returnHandler--
@@ -44,7 +47,7 @@ func ContainsCorrectErrHandler(line string) bool {
 		}
 	}
 
-	if ifHandler != 0 {
+	if hasIfHandler && ifHandler != 0 {
 		return strings.Contains(strings.ToLower(line), "is(err)")
 	}
 

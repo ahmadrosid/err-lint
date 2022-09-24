@@ -79,10 +79,16 @@ func filterScope(i int, lines []string) (next int) {
 			next = i
 			nextLine := lines[next]
 			countBracket = checkBracket(countBracket, nextLine)
+			hasDotSuffix := false
+			if strings.HasSuffix(strings.TrimSpace(nextLine), ".") {
+				hasDotSuffix = true
+				continue
+			}
 
 			if countBracket.Len() == 0 {
 				lastLine := strings.TrimSpace(lines[max(next+1, length-1)])
-				if strings.HasSuffix(strings.TrimSpace(lastLine), ".") {
+				if hasDotSuffix {
+					hasDotSuffix = false
 					continue
 				}
 
