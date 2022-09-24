@@ -8,7 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/fatih/color"
 )
+
+var red = color.New(color.FgRed).SprintFunc()
+var yellow = color.New(color.FgYellow).SprintFunc()
 
 func ReadDirectory(dir string, result func(filename string)) error {
 	err := filepath.Walk(dir,
@@ -117,37 +122,72 @@ func Detect(filename string) {
 		if strings.Contains(line, "err :=") {
 			next := i + 1
 			if next < length {
+				if strings.Contains(lines[next], "err != nil") || strings.Contains(lines[next], "!= nil") {
+					continue
+				}
+
+				if strings.Contains(lines[next], "return") && strings.Contains(lines[next], "err") {
+					continue
+				}
+
 				i, _ := filterScope(i, lines)
 				next = i + 1
 				nextLine := lines[next]
+
 				if strings.Contains(nextLine, "err != nil") {
 					continue
 				}
-				if strings.Contains(nextLine, "return err") {
+				if strings.Contains(nextLine, "return") && strings.Contains(nextLine, "err") {
 					continue
 				}
 
-				if isOnlyWhiteSpace(nextLine) {
-					i++
-					if i >= length {
+				for {
+					if i == length {
+						next = i - 1
 						break
 					}
-					next = i
+
+					if isOnlyWhiteSpace(nextLine) {
+						i++
+						if i < length {
+							next = i
+							nextLine = lines[next]
+						}
+					} else {
+						break
+					}
 				}
 
-				println(fmt.Sprintf("%s:%d", filename, next+1))
-				println(fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx]))
+				printedLines := []string{
+					yellow(fmt.Sprintf("%s:%d", filename, next+1)),
+					fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx]),
+				}
 
-				rangeIdx := next - curLineIdx - 1
+				rangeIdx := next - curLineIdx
+				dontPrint := false
 				for {
 					curLineIdx++
-					println(fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx]))
 					rangeIdx--
-					if rangeIdx == 0 {
+					if curLineIdx == length {
 						break
+					}
+					rangeLine := fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx])
+					if strings.Contains(rangeLine, "err != nil") {
+						dontPrint = true
+						break
+					}
+					if rangeIdx == 0 {
+						printedLines = append(printedLines, red(rangeLine))
+						break
+					} else {
+						printedLines = append(printedLines, rangeLine)
 					}
 				}
 
+				if dontPrint {
+					continue
+				}
+				println(strings.Join(printedLines, "\n"))
 				println()
 			}
 		}
@@ -155,11 +195,11 @@ func Detect(filename string) {
 }
 
 func main() {
-	var filename = *flag.String("source", ".", "Source file or directory name.")
+	var filename = flag.String("source", ".", "Source file or directory name.")
 	flag.Parse()
 
-	err := ReadDirectory(filename, Detect)
+	err := ReadDirectory(*filename, Detect)
 	if err != nil {
-		Detect(filename)
+		Detect(*filename)
 	}
 }
