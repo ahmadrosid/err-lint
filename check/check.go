@@ -44,6 +44,7 @@ func ContainsCorrectErrHandler(line string) bool {
 	hasIfHandler := false
 	hasErrBefore := false
 	hasNotEqBefore := false
+	hasNilBefore := false
 
 	for _, w := range words {
 		w = strings.TrimSpace(w)
@@ -70,8 +71,11 @@ func ContainsCorrectErrHandler(line string) bool {
 			hasNotEqBefore = true
 		}
 		if w == "nil" {
-			ifHandler--
-			isNotNil--
+			if !hasNilBefore {
+				ifHandler--
+				isNotNil--
+				hasNilBefore = true
+			}
 		}
 	}
 

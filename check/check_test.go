@@ -42,6 +42,10 @@ func TestValidateContains(t *testing.T) {
 			input:    "CheckErr(err)",
 			expected: true,
 		},
+		{
+			input:    "if err != nil || gitTree == nil {",
+			expected: true,
+		},
 	}
 
 	for _, s := range scenarios {
