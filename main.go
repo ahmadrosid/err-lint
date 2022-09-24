@@ -3,7 +3,6 @@ package main
 import (
 	"err-lint/check"
 	"err-lint/stack"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -35,23 +34,6 @@ func ReadDirectory(dir string, result func(filename string)) error {
 	return nil
 }
 
-func isWhitespace(c rune) bool {
-	switch c {
-	case ' ', '\t', '\n', '\u000b', '\u000c', '\r':
-		return true
-	}
-	return false
-}
-
-func isOnlyWhiteSpace(line string) bool {
-	for _, c := range line {
-		if !isWhitespace(c) {
-			return false
-		}
-	}
-	return true
-}
-
 func checkBracket(st *stack.Stack, line string) *stack.Stack {
 	pair := map[rune]rune{
 		'{': '}',
@@ -74,12 +56,19 @@ func checkBracket(st *stack.Stack, line string) *stack.Stack {
 	return st
 }
 
-func filterScope(i int, lines []string) (next int, skip bool) {
-	next = i + 1
+func max(cur int, limit int) int {
+	if cur > limit {
+		return limit
+	}
+	return cur
+}
+
+func filterScope(i int, lines []string) (next int) {
 	line := lines[i]
 	length := len(lines)
 
 	countBracket := stack.NewStack()
+	hasDotSuffix := false
 
 	if strings.Contains(line, "{") || strings.Contains(line, "(") {
 		countBracket = checkBracket(countBracket, line)
@@ -92,13 +81,20 @@ func filterScope(i int, lines []string) (next int, skip bool) {
 			nextLine := lines[next]
 			countBracket = checkBracket(countBracket, nextLine)
 
+			if strings.HasSuffix(nextLine, ".") {
+				hasDotSuffix = true
+				continue
+			}
 			if countBracket.Len() == 0 {
+				if hasDotSuffix {
+					next = max(next+1, length-1)
+				}
 				break
 			}
 		}
 	}
 
-	return next, false
+	return next
 }
 
 func Detect(filename string) {
@@ -132,7 +128,7 @@ func Detect(filename string) {
 					continue
 				}
 
-				i, _ := filterScope(i, lines)
+				i := filterScope(i, lines)
 				next = i + 1
 				nextLine := lines[next]
 
@@ -146,7 +142,7 @@ func Detect(filename string) {
 						break
 					}
 
-					if isOnlyWhiteSpace(nextLine) {
+					if check.IsOnlyWhiteSpace(nextLine) {
 						i++
 						if i < length {
 							next = i
@@ -194,11 +190,13 @@ func Detect(filename string) {
 }
 
 func main() {
-	var filename = flag.String("source", ".", "Source file or directory name.")
-	flag.Parse()
+	filename := "."
+	if len(os.Args) > 1 {
+		filename = os.Args[1]
+	}
 
-	err := ReadDirectory(*filename, Detect)
+	err := ReadDirectory(filename, Detect)
 	if err != nil {
-		Detect(*filename)
+		Detect(filename)
 	}
 }
