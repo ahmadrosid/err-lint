@@ -1,6 +1,7 @@
 package main
 
 import (
+	"err-lint/check"
 	"err-lint/stack"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 var red = color.New(color.FgRed).SprintFunc()
 var yellow = color.New(color.FgYellow).SprintFunc()
+var green = color.New(color.FgGreen).SprintFunc()
 
 func ReadDirectory(dir string, result func(filename string)) error {
 	err := filepath.Walk(dir,
@@ -115,14 +117,14 @@ func Detect(filename string) {
 	for i := 0; i < length; i++ {
 		curLineIdx := i
 		line := lines[curLineIdx]
-		if strings.Contains(line, "err != nil") {
+		if check.ContainsCorrectErrHandler(line) {
 			continue
 		}
 
 		if strings.Contains(line, "err :=") {
 			next := i + 1
 			if next < length {
-				if strings.Contains(lines[next], "err != nil") || strings.Contains(lines[next], "!= nil") {
+				if check.ContainsCorrectErrHandler(lines[next]) {
 					continue
 				}
 
@@ -134,10 +136,7 @@ func Detect(filename string) {
 				next = i + 1
 				nextLine := lines[next]
 
-				if strings.Contains(nextLine, "err != nil") {
-					continue
-				}
-				if strings.Contains(nextLine, "return") && strings.Contains(nextLine, "err") {
+				if check.ContainsCorrectErrHandler(nextLine) {
 					continue
 				}
 
@@ -160,7 +159,7 @@ func Detect(filename string) {
 
 				printedLines := []string{
 					yellow(fmt.Sprintf("%s:%d", filename, next+1)),
-					fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx]),
+					green(fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx])),
 				}
 
 				rangeIdx := next - curLineIdx
@@ -172,7 +171,7 @@ func Detect(filename string) {
 						break
 					}
 					rangeLine := fmt.Sprintf("%d %s", curLineIdx+1, lines[curLineIdx])
-					if strings.Contains(rangeLine, "err != nil") {
+					if check.ContainsCorrectErrHandler(rangeLine) {
 						dontPrint = true
 						break
 					}
@@ -180,7 +179,7 @@ func Detect(filename string) {
 						printedLines = append(printedLines, red(rangeLine))
 						break
 					} else {
-						printedLines = append(printedLines, rangeLine)
+						printedLines = append(printedLines, green(rangeLine))
 					}
 				}
 
